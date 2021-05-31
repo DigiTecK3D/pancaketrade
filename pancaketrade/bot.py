@@ -296,7 +296,7 @@ class TradeBot:
         balance_bnb = self.net.get_bnb_balance()
         price_bnb = self.net.get_bnb_price()
         msg = (
-            f'<b>Wallet</b>: {balance_bnb:.4f} BNB (${balance_bnb * price_bnb:.2f})\n'
+            f'<b>Wallet</b>: <code>{balance_bnb:.4f}</code> BNB (${balance_bnb * price_bnb:.2f})\n'
             + 'Which action do you want to perform next?'
         )
         return msg, self.get_global_keyboard()
