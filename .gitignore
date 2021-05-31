@@ -128,7 +128,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Python IDEs
 .vscode/
+.idea/
 
 user_data/config.yml
 user_data/pancaketrade.db
