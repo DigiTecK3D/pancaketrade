@@ -286,8 +286,9 @@ class TradeBot:
             + f'<b>Charts</b>: <a href="https://poocoin.app/tokens/{token.address}">Poocoin</a>     '
             + f'<a href="https://charts.bogged.finance/?token={token.address}">Bogged</a>     '
             + f'<a href="https://dex.guru/token/{token.address}">Dex.Guru</a>\n'
-            + f'<b>Value</b>: <code>{token_balance_bnb:.3g}</code> BNB (${token_balance_usd:.2f})\n'
-            + f'<b>Price</b>: <code>{token_price:.3g}</code> BNB/token (${token_price_usd:.3g})\n'
+            + f'<b>Wallet</b>: <code>{token_balance_bnb:.3g}</code> BNB (${token_balance_usd:.2f})\n'
+            + f'<b>BNB Price</b>: <code>{token_price:.{-token_price.adjusted()+5}f}</code>\n'
+            + f'<b>Token Price</b>: (${token_price_usd:.{-token_price_usd.adjusted()+5}f})\n'
             + effective_buy_price
             + '<b>Orders</b>: (underlined = tracking trailing stop loss)\n'
             + '\n'.join(orders)
