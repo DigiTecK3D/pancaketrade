@@ -304,12 +304,12 @@ class TradeBot:
     def get_global_keyboard(self) -> List[List[InlineKeyboardButton]]:
         buttons = [
             [
-                InlineKeyboardButton('➖ Delete order', callback_data='removeorder'),
                 InlineKeyboardButton('➕ Create order', callback_data='addorder'),
+                InlineKeyboardButton('➖ Delete order', callback_data='removeorder'),
             ],
             [
-                InlineKeyboardButton('❗️ Sell all!', callback_data='sellall'),
                 InlineKeyboardButton('💰 Buy/Sell now', callback_data='buysell'),
+                InlineKeyboardButton('❗️ Sell all!', callback_data='sellall'),
             ],
             [
                 InlineKeyboardButton('📇 Get address', callback_data='address'),
