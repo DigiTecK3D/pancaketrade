@@ -20,6 +20,7 @@ class ConfigSecrets:
 
     telegram_token: str
     admin_chat_id: int
+    wallet_key_id: str = field(repr=False, default='')
     _pk: str = field(repr=False, default='')
 
 
@@ -39,7 +40,8 @@ class Config:
     def __post_init__(self):
         self.wallet = Web3.toChecksumAddress(self.wallet)
         # below we remove any extra key that might exist in the secrets section (formerly we had bscscan api key there)
-        secrets = {key: val for key, val in self.secrets.items() if key in ['telegram_token', 'admin_chat_id']}
+        secrets = {key: val for key, val in self.secrets.items() if key in ['telegram_token', 'admin_chat_id',
+                                                                            'wallet_key_id']}
         self.secrets = ConfigSecrets(**secrets, _pk=self._pk)
 
 
@@ -52,7 +54,7 @@ class PrivateKeyValidator(Validator):
 def parse_config_file(path: Path) -> Config:
     with path.open('r') as f:
         conf = yaml.full_load(f)
-    conf['_pk'] = os.environ.get('WALLET_PK')
+    conf['_pk'] = conf['secrets']['wallet_key_id'] #os.environ.get('WALLET_PK')
     if not conf['_pk'] or len(conf['_pk']) != 64 or not all(c in string.hexdigits for c in conf['_pk']):
         conf['_pk'] = questionary.password(
             f'In order to make transactions, I need the private key for wallet {conf["wallet"]}:',

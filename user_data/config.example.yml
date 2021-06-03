@@ -7,3 +7,4 @@ update_messages: true # status messages will update periodically to show current
 secrets:
   telegram_token: '' # enter your Telegram Bot token
   admin_chat_id: 123456 # enter your chat ID/user ID to prevent other users to use the bot
+  wallet_key_id: '' # insert your wallet address private key here
