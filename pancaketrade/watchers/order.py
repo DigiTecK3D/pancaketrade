@@ -156,7 +156,7 @@ class OrderWatcher:
 
         if self.demo_bot:  # demo mode no buy/sell
             self.dispatcher.bot.send_message(
-            chat_id=self.chat_id, text='<u>Closing the following order:</u>\n' + self.long_repr()
+                chat_id=self.chat_id, text='<u>Closing the following order:</u>\n' + self.long_repr()
             )
         else:  # live mode we can buy/sell
             if self.type == 'buy':

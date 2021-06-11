@@ -1,5 +1,4 @@
 """Config utilities."""
-import os
 import string
 import sys
 from dataclasses import dataclass, field
@@ -14,6 +13,7 @@ from questionary import ValidationError, Validator
 from web3 import Web3
 from web3.types import ChecksumAddress
 from pancaketrade.utils.encrypt import deObfuscate as decrypt
+
 
 @dataclass
 class ConfigSecrets:
@@ -56,7 +56,7 @@ class PrivateKeyValidator(Validator):
 def parse_config_file(path: Path) -> Config:
     with path.open('r') as f:
         conf = yaml.full_load(f)
-    conf['_pk'] = conf['secrets']['wallet_key_id'] # os.environ.get('WALLET_PK')
+    conf['_pk'] = conf['secrets']['wallet_key_id']  # os.environ.get('WALLET_PK')
     # conf['_pk'] = decrypt(conf['secrets']['wallet_key_id'])  # os.environ.get('WALLET_PK')
     if not conf['_pk'] or len(conf['_pk']) != 64 or not all(c in string.hexdigits for c in conf['_pk']):
         conf['_pk'] = questionary.password(
