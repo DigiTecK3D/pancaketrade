@@ -12,7 +12,6 @@ from loguru import logger
 from questionary import ValidationError, Validator
 from web3 import Web3
 from web3.types import ChecksumAddress
-from pancaketrade.utils.encrypt import deObfuscate as decrypt
 
 
 @dataclass
