@@ -121,10 +121,18 @@ class TradeBot:
 
     def start(self):
         try:
-            self.dispatcher.bot.send_message(chat_id=self.config.secrets.admin_chat_id, text='🤖 Bot started')
+            if self.config.bot_demo:
+                # run bot in dry run mode - no real buy/sell ability
+                self.dispatcher.bot.send_message(chat_id=self.config.secrets.admin_chat_id, text='🤖 Bot started - '
+                                                                                                 'Demo mode')
+            else:
+                self.dispatcher.bot.send_message(chat_id=self.config.secrets.admin_chat_id, text='🤖 Bot started')
         except Exception:  # chat doesn't exist yet, do nothing
             logger.info('Chat with user doesn\'t exist yet.')
-        logger.info('Bot started')
+        if self.config.bot_demo:
+            logger.info('Bot started - Demo mode')
+        else:
+            logger.info('Bot started')
         self.updater.start_polling()
         self.updater.idle()
 

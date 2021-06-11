@@ -4,6 +4,7 @@ wallet: regex('^0x[a-fA-F0-9]{40}$', 'ethereum address', required=False)
 min_pool_size_bnb: num(min=0.0001)
 monitor_interval: num(min=1)
 update_messages: bool(required=False)
+bot_demo: bool(required=False)
 secrets:
   telegram_token: regex('[0-9]{9,}:[a-zA-Z0-9_-]{35}', 'telegram token')
   admin_chat_id: int(min=1)
