@@ -1,7 +1,7 @@
-import base64
-import sys
-
-debug = False
+# import base64
+# import sys
+#
+# debug = False
 
 """
 Encrypt code pulled from https://github.com/WP-LKL/bscValueDefi-Exploit
