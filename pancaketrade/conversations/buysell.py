@@ -317,7 +317,8 @@ class BuySellConversation:
             del context.user_data['buysell']
             db.close()
         order = OrderWatcher(
-            order_record=order_record, net=self.net, dispatcher=context.dispatcher, chat_id=update.effective_chat.id
+            order_record=order_record, net=self.net, dispatcher=context.dispatcher, chat_id=update.effective_chat.id,
+            demo_bot=self.config.bot_demo,
         )
         token.orders.append(order)
         chat_message(
