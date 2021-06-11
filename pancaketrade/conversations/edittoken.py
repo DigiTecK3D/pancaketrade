@@ -70,10 +70,10 @@ class EditTokenConversation:
         buttons = [
             [
                 InlineKeyboardButton(f'{token.emoji}Edit emoji', callback_data='emoji'),
-                InlineKeyboardButton('Edit default slippage', callback_data='slippage'),
+                InlineKeyboardButton('✏ Edit default slippage', callback_data='slippage'),
             ],
             [
-                InlineKeyboardButton('Edit buy price', callback_data='buyprice'),
+                InlineKeyboardButton('💵 Edit buy price', callback_data='buyprice'),
                 InlineKeyboardButton('❌ Cancel', callback_data='cancel'),
             ],
         ]
