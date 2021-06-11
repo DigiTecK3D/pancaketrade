@@ -5,18 +5,19 @@ from typing import Optional
 from loguru import logger
 from pancaketrade.network import Network
 from pancaketrade.persistence import Order, Token, db
-from pancaketrade.utils.generic import format_token_amount, start_in_thread
+from pancaketrade.utils.generic import format_token_amount, start_in_thread, format_price_fixed
 from telegram.ext import Dispatcher
 from web3.types import Wei
 
 
 class OrderWatcher:
-    def __init__(self, order_record: Order, net: Network, dispatcher: Dispatcher, chat_id: int):
+    def __init__(self, order_record: Order, net: Network, dispatcher: Dispatcher, chat_id: int, demo_bot: bool):
         self.order_record = order_record
         self.token_record: Token = order_record.token
         self.net = net
         self.dispatcher = dispatcher
         self.chat_id = chat_id
+        self.demo_bot = demo_bot
 
         self.type = order_record.type  # buy (tokens for BNB) or sell (tokens for BNB)
         self.limit_price: Optional[Decimal] = (
@@ -41,11 +42,12 @@ class OrderWatcher:
         unit = self.get_amount_unit()
         trailing = f' tsl {self.trailing_stop}%' if self.trailing_stop is not None else ''
         order_id = f'<u>#{self.order_record.id}</u>' if self.min_price or self.max_price else f'#{self.order_record.id}'
-        limit_price = f'{self.limit_price:.3g} BNB' if self.limit_price is not None else 'market price'
+        limit_price = f'{format_price_fixed(self.limit_price)} USD' if self.limit_price is not None else 'market price'
         icon = '🟢' if self.type == 'buy' else '🔴'
+        order_icon = self.get_type_icon()
         return (
-            f'💱 {order_id}: {self.token_record.symbol} <code>{comparison} {limit_price}</code> - '
-            + f'{icon}<b>{type_name}</b> {format_token_amount(amount)} {unit}{trailing}'
+            f'{order_icon} {order_id}: {self.token_record.symbol} <code>{comparison} {limit_price}</code> - '
+            + f'{icon} <b>{type_name}</b> {format_token_amount(amount)} {unit}{trailing}'
         )
 
     def long_repr(self) -> str:
@@ -64,7 +66,7 @@ class OrderWatcher:
         )
         order_id = f'<u>#{self.order_record.id}</u>' if self.min_price or self.max_price else f'#{self.order_record.id}'
         type_icon = '🟢' if self.type == 'buy' else '🔴'
-        limit_price = f'{self.limit_price:.3g} BNB' if self.limit_price is not None else 'market price'
+        limit_price = f'{format_price_fixed(self.limit_price)} USD' if self.limit_price is not None else 'market price'
         return (
             f'{icon}{self.token_record.symbol} - ({order_id}) <b>{type_name}</b> {type_icon}\n'
             + f'<b>Amount</b>: {format_token_amount(amount)} {unit}\n'
@@ -124,17 +126,18 @@ class OrderWatcher:
         limit_price = (
             self.limit_price if self.limit_price is not None else sell_price
         )  # fulfill condition immediately if we have no limit price
+        sell_price_fixed = format_price_fixed(sell_price)
         if self.trailing_stop is None and not self.above and sell_price <= limit_price:
-            logger.warning(f'Stop loss triggered at price {sell_price:.3e} BNB')
+            logger.warning(f'Stop loss triggered at price {sell_price_fixed} USD')
             self.close(sell_v2=sell_v2, buy_v2=buy_v2)
             return
         elif self.trailing_stop is None and self.above and sell_price >= limit_price:
-            logger.success(f'Take profit triggered at price {sell_price:.3e} BNB')
+            logger.success(f'Take profit triggered at price {sell_price_fixed} USD')
             self.close(sell_v2=sell_v2, buy_v2=buy_v2)
             return
         elif self.trailing_stop and self.above and (sell_price >= limit_price or self.max_price is not None):
             if self.max_price is None:
-                logger.info(f'Limit condition reached at price {sell_price:.3e} BNB')
+                logger.info(f'Limit condition reached at price {sell_price_fixed} USD')
                 self.dispatcher.bot.send_message(
                     chat_id=self.chat_id, text=f'🔹 Order #{self.order_record.id} activated trailing stop loss.'
                 )
@@ -144,31 +147,36 @@ class OrderWatcher:
                 self.max_price = sell_price
                 return
             elif drop > self.trailing_stop:
-                logger.success(f'Trailing stop loss triggered at price {sell_price:.3e} BNB')
+                logger.success(f'Trailing stop loss triggered at price {sell_price_fixed} USD')
                 self.close(sell_v2=sell_v2, buy_v2=buy_v2)
                 return
 
     def close(self, sell_v2: bool, buy_v2: bool):
         self.active = False
 
-        if self.type == 'buy':
-            version = 'v2' if buy_v2 else 'v1'
-            logger.info(f'Buying tokens on {version}')
-            amount = Decimal(self.amount) / Decimal(10 ** 18)
+        if self.demo_bot:  # demo mode no buy/sell
             self.dispatcher.bot.send_message(
-                chat_id=self.chat_id,
-                text=f'🔸 Trying to buy for {format_token_amount(amount)} BNB of {self.token_record.symbol}...',
+            chat_id=self.chat_id, text='<u>Closing the following order:</u>\n' + self.long_repr()
             )
-            start_in_thread(self.buy, args=(buy_v2, sell_v2))
-        else:  # sell
-            version = 'v2' if sell_v2 else 'v1'
-            logger.info(f'Selling tokens on {version}')
-            amount = Decimal(self.amount) / Decimal(10 ** self.token_record.decimals)
-            self.dispatcher.bot.send_message(
-                chat_id=self.chat_id,
-                text=f'🔸 Trying to sell {format_token_amount(amount)} {self.token_record.symbol}...',
-            )
-            start_in_thread(self.sell, args=(sell_v2,))
+        else:  # live mode we can buy/sell
+            if self.type == 'buy':
+                version = 'v2' if buy_v2 else 'v1'
+                logger.info(f'Buying tokens on {version}')
+                amount = Decimal(self.amount) / Decimal(10 ** 18)
+                self.dispatcher.bot.send_message(
+                    chat_id=self.chat_id,
+                    text=f'🔸 Trying to buy for {format_token_amount(amount)} BNB of {self.token_record.symbol}...',
+                )
+                start_in_thread(self.buy, args=(buy_v2, sell_v2))
+            else:  # sell
+                version = 'v2' if sell_v2 else 'v1'
+                logger.info(f'Selling tokens on {version}')
+                amount = Decimal(self.amount) / Decimal(10 ** self.token_record.decimals)
+                self.dispatcher.bot.send_message(
+                    chat_id=self.chat_id,
+                    text=f'🔸 Trying to sell {format_token_amount(amount)} {self.token_record.symbol}...',
+                )
+                start_in_thread(self.sell, args=(sell_v2,))
 
     def buy(self, v2: bool, sell_v2: bool):
         balance_before = self.net.get_token_balance(token_address=self.token_record.address)
@@ -296,6 +304,17 @@ class OrderWatcher:
             else 'stop loss'
             if self.type == 'sell' and not self.above
             else 'limit sell'
+            if self.type == 'sell' and self.above
+            else 'unknown'
+        )
+
+    def get_type_icon(self) -> str:
+        return (
+            '💵'
+            if self.type == 'buy' and not self.above
+            else '🚫'
+            if self.type == 'sell' and not self.above
+            else '💰'
             if self.type == 'sell' and self.above
             else 'unknown'
         )

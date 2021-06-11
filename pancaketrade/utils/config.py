@@ -35,6 +35,7 @@ class Config:
     min_pool_size_bnb: float = 25
     monitor_interval: float = 5
     update_messages: bool = False
+    bot_demo: bool = False
     config_file: str = 'config.yml'
     _pk: str = field(repr=False, default='')
 

@@ -81,11 +81,11 @@ class AddOrderConversation:
         reply_markup = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton('Stop loss sell', callback_data='stop_loss'),
-                    InlineKeyboardButton('Take profit sell', callback_data='limit_sell'),
+                    InlineKeyboardButton('🚫 Stop loss sell', callback_data='stop_loss'),
+                    InlineKeyboardButton('💰 Take profit sell', callback_data='limit_sell'),
                 ],
                 [
-                    InlineKeyboardButton('Limit buy', callback_data='limit_buy'),
+                    InlineKeyboardButton('💵 Limit buy', callback_data='limit_buy'),
                     InlineKeyboardButton('❌ Cancel', callback_data='cancel'),
                 ],
             ]
@@ -113,9 +113,8 @@ class AddOrderConversation:
             order['trailing_stop'] = None
             # we don't use trailing stop loss here
             token = self.parent.watchers[order['token_address']]
-            current_price, _ = self.net.get_token_price(
-                token_address=token.address, token_decimals=token.decimals, sell=True
-            )
+            current_price = self.net.get_token_price_usd(
+                token_address=token.address, token_decimals=token.decimals, sell=True)
             chat_message(
                 update,
                 context,
@@ -165,9 +164,8 @@ class AddOrderConversation:
         assert context.user_data is not None
         order = context.user_data['addorder']
         token = self.parent.watchers[order['token_address']]
-        current_price, _ = self.net.get_token_price(
-            token_address=token.address, token_decimals=token.decimals, sell=order['type'] == 'sell'
-        )
+        current_price = self.net.get_token_price_usd(
+            token_address=token.address, token_decimals=token.decimals, sell=True)
         next_message = self.get_price_message(current_price=current_price, token_symbol=token.symbol)
         if update.message is None:
             assert update.callback_query
@@ -224,9 +222,8 @@ class AddOrderConversation:
             except Exception:
                 chat_message(update, context, text='⚠️ The factor you inserted is not valid. Try again:', edit=False)
                 return self.next.PRICE
-            current_price, _ = self.net.get_token_price(
-                token_address=token.address, token_decimals=token.decimals, sell=order['type'] == 'sell'
-            )
+            current_price = self.net.get_token_price_usd(
+                token_address=token.address, token_decimals=token.decimals, sell=True)
             price = factor * current_price
         else:
             try:
@@ -241,6 +238,7 @@ class AddOrderConversation:
             if order['type'] == 'buy'
             else self.net.get_token_balance(token_address=token.address)
         )
+        fixed_price = format_price_fixed(price)
         # if selling tokens, add options 25/50/75/100% with buttons
         reply_markup = (
             InlineKeyboardMarkup(
@@ -262,7 +260,8 @@ class AddOrderConversation:
         chat_message(
             update,
             context,
-            text=f'OK, I will {order["type"]} when the price of {token.symbol} reaches {price:.4g} BNB per token.\n'
+            text=f'OK, I will {order["type"]} when the price of {token.symbol} reaches\n'
+                 f'"<code>{fixed_price}</code>" USD per token.\n'
             + f'Next, <u>how much {unit}</u> do you want me to use for {order["type"]}ing?\n'
             + f'You can also use scientific notation like <code>{balance:.1e}</code> or a percentage like '
             + '<code>63%</code>.\n'
@@ -318,7 +317,7 @@ class AddOrderConversation:
         decimals = 18 if order['type'] == 'buy' else token.decimals
         bnb_price = self.net.get_bnb_price()
         limit_price = Decimal(order["limit_price"])
-        usd_amount = bnb_price * amount if order['type'] == 'buy' else bnb_price * limit_price * amount
+        usd_amount = bnb_price * amount if order['type'] == 'buy' else limit_price * amount
         unit = f'BNB worth of {token.symbol}' if order['type'] == 'buy' else token.symbol
         order['amount'] = str(int(amount * Decimal(10 ** decimals)))
         reply_markup = InlineKeyboardMarkup(
@@ -477,14 +476,15 @@ class AddOrderConversation:
             else f'network default {order["gas_price"]} Gwei'
         )
         limit_price = Decimal(order["limit_price"])
+        limit_price_fixed = format_price_fixed(limit_price)
         bnb_price = self.net.get_bnb_price()
-        usd_amount = bnb_price * amount if order['type'] == 'buy' else bnb_price * limit_price * amount
+        usd_amount = bnb_price * amount if order['type'] == 'buy' else limit_price * amount
         message = (
             '<u>Preview:</u>\n'
             + f'{token.name} - {type_name}\n'
             + trailing
             + f'Amount: {format_token_amount(amount)} {unit} (${usd_amount:.2f})\n'
-            + f'Price {comparision} {limit_price:.3g} BNB per token\n'
+            + f'Price {comparision} {limit_price_fixed} USD per token\n'
             + f'Slippage: {order["slippage"]}%\n'
             + f'Gas: {gas_price}'
         )
@@ -567,13 +567,13 @@ class AddOrderConversation:
     def get_price_message(self, current_price: Decimal, token_symbol: str) -> str:
         current_price_fixed = format_price_fixed(current_price)
         next_message = (
-            f'Next, please indicate the <u>price in <b>BNB per {token_symbol}</b></u> '
+            f'Next, please indicate the <u>price in <b>USD per {token_symbol}</b></u> '
             + 'at which the order will activate.\n'
             + 'You have 3 options for this:\n'
             + f' ・ Standard notation like "<code>{current_price_fixed}</code>"\n'
-            + f' ・ Scientific notation like "<code>{current_price:.1e}</code>"\n'
+            + f' ・ Scientific notation like "<code>{current_price:.6g}</code>"\n'
             + ' ・ Multiplier for the current price like "<code>1.5x</code>" (include the "x" at the end)\n'
-            + f'<b>Current price</b>: <code>{current_price:.4g}</code> BNB per {token_symbol}.'
+            + f'<b>Current price</b>: <code>{current_price_fixed}</code> USD per {token_symbol}.'
         )
         return next_message
 

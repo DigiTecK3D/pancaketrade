@@ -41,12 +41,13 @@ class TokenWatcher:
                 net=self.net,
                 dispatcher=self.dispatcher,
                 chat_id=self.config.secrets.admin_chat_id,
+                demo_bot=self.config.bot_demo,
             )
             for order_record in orders
         ]
         self.interval = self.config.monitor_interval
         self.scheduler = BackgroundScheduler(
-            job_defaults={'coalesce': True, 'max_instances': 1, 'misfire_grace_time': 0.8 * self.interval}
+            job_defaults={'coalesce': True, 'max_instances': 1, 'misfire_grace_time': max(1, int(0.8 * self.interval))}
         )
         self.last_status_message_id: Optional[int] = None
         self.start_monitoring()
@@ -66,12 +67,15 @@ class TokenWatcher:
         sell_price, sell_v2 = self.net.get_token_price(
             token_address=self.address, token_decimals=self.decimals, sell=True
         )
+        token_price_usd = self.net.get_token_price_usd(
+            token_address=self.address, token_decimals=self.decimals, sell=True, token_price=sell_price
+        )
         if self.net.has_both_versions(token_address=self.address):
             buy_price, buy_v2 = self.net.get_token_price(
                 token_address=self.address, token_decimals=self.decimals, sell=False
             )
         else:
-            buy_price = sell_price
+            buy_price = token_price_usd
             buy_v2 = sell_v2
         indices_to_remove: List[int] = []
         for i, order in enumerate(self.orders):
@@ -98,7 +102,7 @@ class TokenWatcher:
                         chat_id=self.config.secrets.admin_chat_id,
                         text='⛔ Approval failed',
                     )
-            order.price_update(sell_price=sell_price, buy_price=buy_price, sell_v2=sell_v2, buy_v2=buy_v2)
+            order.price_update(sell_price=token_price_usd, buy_price=buy_price, sell_v2=sell_v2, buy_v2=buy_v2)
         self.orders = [o for i, o in enumerate(self.orders) if i not in indices_to_remove]
 
     def update_effective_buy_price(self):
