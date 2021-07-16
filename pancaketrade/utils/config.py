@@ -3,6 +3,7 @@ import string
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 import questionary
 import yamale
@@ -21,6 +22,8 @@ class ConfigSecrets:
     telegram_token: str
     admin_chat_id: int
     wallet_key_id: str = field(repr=False, default='')
+    rpc_auth_user: Optional[str] = None
+    rpc_auth_password: Optional[str] = None
     _pk: str = field(repr=False, default='')
 
 
@@ -41,8 +44,11 @@ class Config:
     def __post_init__(self):
         self.wallet = Web3.toChecksumAddress(self.wallet)
         # below we remove any extra key that might exist in the secrets section (formerly we had bscscan api key there)
-        secrets = {key: val for key, val in self.secrets.items() if key in ['telegram_token', 'admin_chat_id',
-                                                                            'wallet_key_id']}
+        secrets = {
+            key: val
+            for key, val in self.secrets.items()
+            if key in ['telegram_token', 'admin_chat_id', 'rpc_auth_user', 'rpc_auth_password', 'wallet_key_id']
+        }
         self.secrets = ConfigSecrets(**secrets, _pk=self._pk)
 
 
@@ -59,11 +65,12 @@ def parse_config_file(path: Path) -> Config:
     # conf['_pk'] = decrypt(conf['secrets']['wallet_key_id'])  # os.environ.get('WALLET_PK')
     if not conf['_pk'] or len(conf['_pk']) != 64 or not all(c in string.hexdigits for c in conf['_pk']):
         conf['_pk'] = questionary.password(
-            f'In order to make transactions, I need the private key for wallet {conf["wallet"]}:',
+            'In order to make transactions, I need the private key for your wallet:',
             validate=PrivateKeyValidator,
         ).ask()
     account = Account.from_key(conf['_pk'])
     conf['wallet'] = account.address
+    logger.info(f'Using wallet address {conf["wallet"]}.')
     conf['config_file'] = str(path)
     return Config(**conf)
 

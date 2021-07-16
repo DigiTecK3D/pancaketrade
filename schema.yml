@@ -9,3 +9,5 @@ secrets:
   telegram_token: regex('[0-9]{9,}:[a-zA-Z0-9_-]{35}', 'telegram token')
   admin_chat_id: int(min=1)
   wallet_key_id: regex('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$', 'ethereum address key')
+  rpc_auth_user: str(required=False)
+  rpc_auth_password: str(required=False)

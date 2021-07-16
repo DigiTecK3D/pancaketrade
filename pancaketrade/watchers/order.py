@@ -35,22 +35,21 @@ class OrderWatcher:
         self.min_price: Optional[Decimal] = None
         self.max_price: Optional[Decimal] = None
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         type_name = self.get_type_name()
         comparison = self.get_comparison_symbol()
         amount = self.get_human_amount()
         unit = self.get_amount_unit()
         trailing = f' tsl {self.trailing_stop}%' if self.trailing_stop is not None else ''
         order_id = f'<u>#{self.order_record.id}</u>' if self.min_price or self.max_price else f'#{self.order_record.id}'
-        limit_price = f'{format_price_fixed(self.limit_price)} USD' if self.limit_price is not None else 'market price'
-        icon = '🟢' if self.type == 'buy' else '🔴'
-        order_icon = self.get_type_icon()
+        limit_price = f'<code>{format_price_fixed(self.limit_price)}</code> USD' if self.limit_price is not None else 'market price'
+        type_icon = self.get_type_icon()
         return (
-            f'{order_icon} {order_id}: {self.token_record.symbol} <code>{comparison} {limit_price}</code> - '
-            + f'{icon} <b>{type_name}</b> {format_token_amount(amount)} {unit}{trailing}'
+            f'{type_icon} {order_id}: {self.token_record.symbol} {comparison} {limit_price} - '
+            + f'<b>{type_name}</b> <code>{format_token_amount(amount)}</code> {unit}{trailing}'
         )
 
-    def long_repr(self) -> str:
+    def long_str(self) -> str:
         icon = self.token_record.icon + ' ' if self.token_record.icon else ''
         type_name = self.get_type_name()
         comparision = self.get_comparison_symbol()
@@ -58,19 +57,19 @@ class OrderWatcher:
         unit = self.get_amount_unit()
         trailing = f'Trailing stop loss {self.trailing_stop}% callback\n' if self.trailing_stop is not None else ''
         gas_price = (
-            f'{Decimal(self.gas_price) / Decimal(10 ** 9):.1g} Gwei'
+            f'{Decimal(self.gas_price) / Decimal(10 ** 9):.1f} Gwei'
             if self.gas_price and not self.gas_price.startswith('+')
             else 'network default'
             if self.gas_price is None
             else f'network default {self.gas_price} Gwei'
         )
         order_id = f'<u>#{self.order_record.id}</u>' if self.min_price or self.max_price else f'#{self.order_record.id}'
-        type_icon = '🟢' if self.type == 'buy' else '🔴'
-        limit_price = f'{format_price_fixed(self.limit_price)} USD' if self.limit_price is not None else 'market price'
+        type_icon = self.get_type_icon()
+        limit_price = f'<code>{format_price_fixed(self.limit_price)}</code> USD' if self.limit_price is not None else 'market price'
         return (
             f'{icon}{self.token_record.symbol} - ({order_id}) <b>{type_name}</b> {type_icon}\n'
-            + f'<b>Amount</b>: {format_token_amount(amount)} {unit}\n'
-            + f'<b>Price</b>: <code>{comparision} {limit_price}</code>\n'
+            + f'<b>Amount</b>: <code>{format_token_amount(amount)}</code> {unit}\n'
+            + f'<b>Price</b>: {comparision} {limit_price}\n'
             + trailing
             + f'<b>Slippage</b>: {self.slippage}%\n'
             + f'<b>Gas</b>: {gas_price}\n'
@@ -190,7 +189,7 @@ class OrderWatcher:
             logger.error(f'Transaction failed: {reason_or_link}')
             self.dispatcher.bot.send_message(
                 chat_id=self.chat_id,
-                text=f'⛔️ <u>Transaction failed:</u> {txhash_or_error}\n' + 'Order below deleted:\n' + self.long_repr(),
+                text=f'⛔️ <u>Transaction failed:</u> {txhash_or_error}\n' + 'Order below deleted:\n' + self.long_str(),
             )
             self.remove_order()
             self.finished = True  # will trigger deletion of the object
@@ -220,7 +219,7 @@ class OrderWatcher:
             + f'Effective price (after tax) {effective_price:.4g} BNB/token'
         )
         self.dispatcher.bot.send_message(
-            chat_id=self.chat_id, text='<u>Closing the following order:</u>\n' + self.long_repr()
+            chat_id=self.chat_id, text='<u>Closing the following order:</u>\n' + self.long_str()
         )
         self.dispatcher.bot.send_message(
             chat_id=self.chat_id,
@@ -267,7 +266,7 @@ class OrderWatcher:
                 reason_or_link = txhash_or_error
             self.dispatcher.bot.send_message(
                 chat_id=self.chat_id,
-                text=f'⛔️ <u>Transaction failed:</u> {reason_or_link}\n' + 'Order below deleted.\n' + self.long_repr(),
+                text=f'⛔️ <u>Transaction failed:</u> {reason_or_link}\n' + 'Order below deleted.\n' + self.long_str(),
             )
             self.remove_order()
             self.finished = True  # will trigger deletion of the object
@@ -279,7 +278,7 @@ class OrderWatcher:
             + f'Effective price (after tax) {effective_price:.4g} BNB/token'
         )
         self.dispatcher.bot.send_message(
-            chat_id=self.chat_id, text='<u>Closing the following order:</u>\n' + self.long_repr()
+            chat_id=self.chat_id, text='<u>Closing the following order:</u>\n' + self.long_str()
         )
         self.dispatcher.bot.send_message(
             chat_id=self.chat_id,
@@ -310,7 +309,7 @@ class OrderWatcher:
             if self.type == 'sell' and not self.above
             else '💰'
             if self.type == 'sell' and self.above
-            else 'unknown'
+            else ''
         )
 
     def get_comparison_symbol(self) -> str:

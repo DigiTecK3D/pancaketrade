@@ -113,7 +113,7 @@ class BuySellConversation:
         chat_message(
             update,
             context,
-            text=f'OK, the order will {order["type"]} {token.name}. '
+            text=f'OK, the order will {order["type"]} {token.name}.'
             + 'Do you want to enable <u>trailing stop loss</u>? If yes, what is the callback rate?\n'
             + 'You can also message me a custom value in percent.',
             reply_markup=reply_markup,

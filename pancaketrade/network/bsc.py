@@ -1,7 +1,7 @@
 import time
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple
+from typing import Dict, NamedTuple, Optional, Set, Tuple
 
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -9,13 +9,14 @@ from apscheduler.triggers.interval import IntervalTrigger
 from cachetools import LRUCache, TTLCache, cached
 from loguru import logger
 from pancaketrade.utils.config import ConfigSecrets
+from requests.auth import HTTPBasicAuth
 from web3 import Web3
 from web3.contract import Contract, ContractFunction
 from web3.exceptions import ABIFunctionNotFound, ContractLogicError
 from web3.middleware import geth_poa_middleware
 from web3.types import BlockIdentifier, ChecksumAddress, HexBytes, Nonce, TxParams, TxReceipt, Wei
 
-GAS_LIMIT_FAILSAFE = Wei(1000000)  # if the estimated limit is above this one, don't use the estimated price
+GAS_LIMIT_FAILSAFE = Wei(2000000)  # if the estimated limit is above this one, don't use the estimated price
 
 
 class NetworkAddresses(NamedTuple):
@@ -59,7 +60,12 @@ class Network:
         session = requests.Session()
         session.mount('http://', adapter)
         session.mount('https://', adapter)
-        w3_provider = Web3.HTTPProvider(endpoint_uri=rpc, session=session)
+        auth = (
+            {'auth': HTTPBasicAuth(secrets.rpc_auth_user, secrets.rpc_auth_password)}
+            if secrets.rpc_auth_user and secrets.rpc_auth_password
+            else None
+        )
+        w3_provider = Web3.HTTPProvider(endpoint_uri=rpc, session=session, request_kwargs=auth)
         self.w3 = Web3(provider=w3_provider)
         self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
         self.addr = NetworkAddresses()
@@ -106,7 +112,8 @@ class Network:
             balance = self.get_token_balance(token_address=token_address)
         if token_price is None:
             token_price, _ = self.get_token_price(token_address=token_address)
-        return token_price * balance
+        bal_bnb = token_price * balance  # artifact when balance is zero -> 0e-35
+        return Decimal(0) if bal_bnb < 1e-30 else bal_bnb
 
     def get_token_balance(self, token_address: ChecksumAddress) -> Decimal:
         token_contract = self.get_token_contract(token_address)
@@ -144,6 +151,8 @@ class Network:
     def get_token_price(
         self, token_address: ChecksumAddress, token_decimals: Optional[int] = None, sell: bool = True
     ) -> Tuple[Decimal, bool]:
+        if token_address == self.addr.wbnb:  # special case for wbnb
+            return Decimal(1), True
         if token_decimals is None:
             token_decimals = self.get_token_decimals(token_address=token_address)
         token_contract = self.get_token_contract(token_address)
@@ -216,35 +225,6 @@ class Network:
         except Exception:
             bnb_per_token = Decimal(0)
         return bnb_per_token
-
-    def get_token_price_history(
-        self,
-        token_contract: Contract,
-        token_lp: ChecksumAddress,
-        token_decimals: int,
-        block_to: BlockIdentifier = 'latest',
-        duration: int = 100,
-    ) -> List[Tuple[int, Decimal]]:
-        # make it smarter with filtering only blocks that have tx https://web3py.readthedocs.io/en/stable/filters.html
-        start = time.time()
-        prices: List[Tuple[int, Decimal]] = []
-        end_block = self.w3.eth.block_number if not isinstance(block_to, int) else block_to
-        for block in range(end_block + 1 - duration, end_block + 1):
-            block_data = self.w3.eth.get_block(block)
-            prices.append(
-                (
-                    block_data['timestamp'],
-                    self.get_token_price_by_lp(
-                        token_contract=token_contract,
-                        token_lp=token_lp,
-                        token_decimals=token_decimals,
-                        ignore_poolsize=False,
-                        block_identifier=block,
-                    ),
-                )
-            )
-        print(time.time() - start)
-        return prices
 
     @cached(cache=TTLCache(maxsize=1, ttl=30))
     def get_bnb_price(self) -> Decimal:
@@ -328,7 +308,7 @@ class Network:
             logger.error(f'Approval call failed at tx {Web3.toHex(primitive=receipt["transactionHash"])}')
             return False
         self.approved.add((str(token_address), v2))
-        time.sleep(10)  # let tx propagate
+        time.sleep(3)  # let tx propagate
         logger.success('Approved wallet for trading.')
         return True
 
@@ -348,7 +328,7 @@ class Network:
         final_gas_price = self.w3.eth.gas_price
         if gas_price is not None and gas_price.startswith('+'):
             offset = Web3.toWei(Decimal(gas_price) * Decimal(10 ** 9), unit='wei')
-            final_gas_price += offset
+            final_gas_price = Wei(final_gas_price + offset)
         elif gas_price is not None:
             final_gas_price = Web3.toWei(gas_price, unit='wei')
         router_contract = self.contracts.router_v2 if v2 else self.contracts.router_v1
@@ -363,7 +343,11 @@ class Network:
         )
         if receipt is None:
             logger.error('Can\'t get gas estimate')
-            return False, Decimal(0), 'Can\'t get gas estimate'
+            return (
+                False,
+                Decimal(0),
+                f'Can\'t get gas estimate, check if slippage is set correctly (currently {slippage_percent}%)',
+            )
         txhash = Web3.toHex(primitive=receipt["transactionHash"])
         if receipt['status'] == 0:  # fail
             logger.error(f'Buy transaction failed at tx {txhash}')
@@ -389,14 +373,14 @@ class Network:
         v2: bool,
     ) -> Optional[TxReceipt]:
         router_contract = self.contracts.router_v2 if v2 else self.contracts.router_v1
-        func = router_contract.functions.swapExactETHForTokensSupportingFeeOnTransferTokens(
+        func = router_contract.functions.swapExactETHForTokens(
             min_output_tokens, [self.addr.wbnb, token_address], self.wallet, self.deadline(60)
         )
         try:
             gas_limit = Wei(int(Decimal(func.estimateGas({'from': self.wallet, 'value': amount_bnb})) * Decimal(1.5)))
         except Exception as e:
-            logger.warning(f'Error estimating gas price, trying again with older method: {e}')
-            func = router_contract.functions.swapExactETHForTokens(
+            logger.warning(f'Error estimating gas limit, trying again with alternative method: {e}')
+            func = router_contract.functions.swapExactETHForTokensSupportingFeeOnTransferTokens(
                 min_output_tokens, [self.addr.wbnb, token_address], self.wallet, self.deadline(60)
             )
             try:
@@ -426,7 +410,7 @@ class Network:
         final_gas_price = self.w3.eth.gas_price
         if gas_price is not None and gas_price.startswith('+'):
             offset = Web3.toWei(Decimal(gas_price) * Decimal(10 ** 9), unit='wei')
-            final_gas_price += offset
+            final_gas_price = Wei(final_gas_price + offset)
         elif gas_price is not None:
             final_gas_price = Web3.toWei(gas_price, unit='wei')
         router_contract = self.contracts.router_v2 if v2 else self.contracts.router_v1
@@ -443,7 +427,11 @@ class Network:
         )
         if receipt is None:
             logger.error('Can\'t get gas estimate')
-            return False, Decimal(0), 'Can\'t get gas estimate'
+            return (
+                False,
+                Decimal(0),
+                f'Can\'t get gas estimate, check if slippage is set correctly (currently {slippage_percent}%)',
+            )
         txhash = Web3.toHex(primitive=receipt["transactionHash"])
         if receipt['status'] == 0:  # fail
             logger.error(f'Sell transaction failed at tx {txhash}')
@@ -455,7 +443,7 @@ class Network:
                 continue
             if log['args']['src'] != router_contract.address:
                 continue
-            amount_out = Web3.fromWei(log['args']['wad'], unit='ether')
+            amount_out = Decimal(Web3.fromWei(log['args']['wad'], unit='ether'))
             break
         logger.success(f'Sell transaction succeeded at tx {txhash}')
         return True, amount_out, txhash
@@ -469,14 +457,14 @@ class Network:
         v2: bool,
     ) -> Optional[TxReceipt]:
         router_contract = self.contracts.router_v2 if v2 else self.contracts.router_v1
-        func = router_contract.functions.swapExactTokensForETHSupportingFeeOnTransferTokens(
+        func = router_contract.functions.swapExactTokensForETH(
             amount_tokens, min_output_bnb, [token_address, self.addr.wbnb], self.wallet, self.deadline(60)
         )
         try:
             gas_limit = Wei(int(Decimal(func.estimateGas({'from': self.wallet, 'value': Wei(0)})) * Decimal(1.5)))
         except Exception as e:
-            logger.warning(f'Error estimating gas price, trying again with older method: {e}')
-            func = router_contract.functions.swapExactTokensForETH(
+            logger.warning(f'Error estimating gas limit, trying again with alternative method: {e}')
+            func = router_contract.functions.swapExactTokensForETHSupportingFeeOnTransferTokens(
                 amount_tokens, min_output_bnb, [token_address, self.addr.wbnb], self.wallet, self.deadline(60)
             )
             try:
@@ -502,11 +490,12 @@ class Network:
 
     def get_tx_params(self, value: Wei = Wei(0), gas: Wei = Wei(100000), gas_price: Optional[Wei] = None) -> TxParams:
         # 100000 gas is OK for approval tx, so it's the default
+        nonce = max(self.last_nonce, self.w3.eth.get_transaction_count(self.wallet))
         params: TxParams = {
             'from': self.wallet,
             'value': value,
             'gas': gas,
-            'nonce': self.last_nonce,
+            'nonce': nonce,
         }
         if gas_price:
             params['gasPrice'] = gas_price
