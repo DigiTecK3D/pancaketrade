@@ -42,7 +42,8 @@ class OrderWatcher:
         unit = self.get_amount_unit()
         trailing = f' tsl {self.trailing_stop}%' if self.trailing_stop is not None else ''
         order_id = f'<u>#{self.order_record.id}</u>' if self.min_price or self.max_price else f'#{self.order_record.id}'
-        limit_price = f'<code>{format_price_fixed(self.limit_price)}</code> USD' if self.limit_price is not None else 'market price'
+        limit_price = f'<code>{format_price_fixed(self.limit_price)}</code> USD' \
+            if self.limit_price is not None else 'market price'
         type_icon = self.get_type_icon()
         return (
             f'{type_icon} {order_id}: {self.token_record.symbol} {comparison} {limit_price} - '
@@ -65,7 +66,8 @@ class OrderWatcher:
         )
         order_id = f'<u>#{self.order_record.id}</u>' if self.min_price or self.max_price else f'#{self.order_record.id}'
         type_icon = self.get_type_icon()
-        limit_price = f'<code>{format_price_fixed(self.limit_price)}</code> USD' if self.limit_price is not None else 'market price'
+        limit_price = f'<code>{format_price_fixed(self.limit_price)}</code> USD' \
+            if self.limit_price is not None else 'market price'
         return (
             f'{icon}{self.token_record.symbol} - ({order_id}) <b>{type_name}</b> {type_icon}\n'
             + f'<b>Amount</b>: <code>{format_token_amount(amount)}</code> {unit}\n'
@@ -149,7 +151,7 @@ class OrderWatcher:
 
         if self.demo_bot:  # demo mode no buy/sell
             self.dispatcher.bot.send_message(
-                chat_id=self.chat_id, text='<u>Closing the following order:</u>\n' + self.long_repr()
+                chat_id=self.chat_id, text='<u>Closing the following order:</u>\n' + self.long_str()
             )
         else:  # live mode we can buy/sell
             if self.type == 'buy':

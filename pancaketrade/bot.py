@@ -361,7 +361,7 @@ class TradeBot:
         orders = [str(order) for order in orders_sorted]
         message = (
             f'<b>{token.name}</b>: {format_token_amount(token_balance)}\n'
-			+ f'<b>Charts</b>: {"    ".join(chart_links)}\n'
+            + f'<b>Charts</b>: {"    ".join(chart_links)}\n'
             + f'<b>Wallet</b>: <code>{token_balance_bnb:.3g}</code> BNB (${token_balance_usd:.2f})\n'
             + f'<b>BNB Price</b>: <code>{token_price:.{-token_price.adjusted()+5}f}</code>\n'
             + f'<b>Token Price</b>: (${token_price_usd:.{-token_price_usd.adjusted()+5}f})\n'
